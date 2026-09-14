@@ -1,50 +1,81 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
-import { useAuth } from './hooks/useAuth';
-import { LoginPage } from './pages/LoginPage';
-import { DashboardPlaceholder } from './pages/DashboardPlaceholder';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { AuthProvider } from './context/AuthContext.jsx';
+import { SavedProvider } from './context/SavedContext.jsx';
+import { useAuth } from './hooks/useAuth.js';
+import { LoginPage } from './pages/LoginPage.jsx';
+import { ListingsPage } from './pages/ListingsPage.jsx';
+import { ListingDetailPage } from './pages/ListingDetailPage.jsx';
+import { SavedListingsPage } from './pages/SavedListingsPage.jsx';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-3">
-        <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
-        <p className="text-xs text-slate-500 font-medium tracking-wide">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
           Verifying session...
-        </p>
+        </div>
       </div>
     );
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+  return isAuthenticated ? children : <Navigate to="/login" replace />;
+}
 
-  return children;
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <Routes>
+              <Route
+                path="/"
+                element={<Navigate to="/listings" replace />}
+              />
+
+              <Route
+                path="/listings"
+                element={<ListingsPage />}
+              />
+
+              <Route
+                path="/listings/:listingId"
+                element={<ListingDetailPage />}
+              />
+
+              <Route
+                path="/saved"
+                element={<SavedListingsPage />}
+              />
+
+              <Route
+                path="*"
+                element={<Navigate to="/listings" replace />}
+              />
+            </Routes>
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
+  );
 }
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <DashboardPlaceholder />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <SavedProvider>
+          <AppRoutes />
+        </SavedProvider>
       </AuthProvider>
     </BrowserRouter>
   );
 }
-
