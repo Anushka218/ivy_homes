@@ -1,0 +1,244 @@
+{
+  "api_key": "IVY26-782FF9420DE1",
+  "candidate": {
+    "name": "Anushka Bhadauria",
+    "email": "anushkabhadauria370@gmail.com",
+    "repo_url": "https://github.com/Anushka218/ivy_homes",
+    "demo_url": "https://ivy-homes-smoky.vercel.app/login"
+  },
+  "answers": {
+    "total_listing_records": 4100,
+    "unique_properties": 3722,
+    "active_listings": 3233,
+    "corrupt_listing_ids": [
+      "100-4000457",
+      "DWE-4001424",
+      "DWE-4002374",
+      "MAG-4000145",
+      "SQU-4002483",
+      "ZER-4000021",
+      "ZER-4001287",
+      "ZER-4001669",
+      "ZER-4001686"
+    ],
+    "total_monthly_rent": 5330500,
+    "avg_price_per_sqft_2bhk": 16174.70,
+    "costliest_project": {
+      "project_id": "P40224",
+      "price_max_inr": 37800000
+    },
+    "listings_last_7_days": 122,
+    "fake_listing_ids": [
+      "100-4001484",
+      "100-4001961",
+      "DWE-4000745",
+      "MAG-4000075",
+      "MAG-4000870",
+      "MAG-4001467",
+      "MAG-4002092",
+      "SQU-4001342",
+      "ZER-4002683"
+    ],
+    "projects_with_wrong_listing_count": 336
+  },
+  "findings": [
+    {
+      "endpoint": "*",
+      "category": "auth",
+      "documented": "The API key is supplied as a query parameter using ?api_key=...",
+      "actual": "The API rejects the query parameter and requires the key in the X-API-Key request header.",
+      "how_found": "Sent a documented query-parameter request and received an error explicitly requiring X-API-Key.",
+      "impact": "Clients following the documentation cannot authenticate requests.",
+      "evidence": []
+    },
+    {
+      "endpoint": "POST /auth/login",
+      "category": "auth",
+      "documented": "Login returns token, token_type, expires_in=86400, and user containing email and name; no refresh mechanism is documented.",
+      "actual": "Login returns access_token, refresh_token, token_type, expires_in=900, refresh_url=/auth/refresh, and an observed user object containing email.",
+      "how_found": "Performed a real login with the assigned demo account and inspected the response schema and expiry.",
+      "impact": "A client implementing the documented response shape would fail to read the access token and would incorrectly assume a 24-hour session with no refresh.",
+      "evidence": []
+    },
+    {
+      "endpoint": "POST /auth/refresh",
+      "category": "undocumented_endpoint",
+      "documented": "No refresh endpoint is documented.",
+      "actual": "POST /auth/refresh exists and accepts a refresh_token, returning a renewed access_token and refresh_token with expires_in=900.",
+      "how_found": "Observed refresh_url in the login response and successfully called the endpoint.",
+      "impact": "The endpoint is necessary for maintaining the documented 30-minute session requirement without forcing re-login.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "pagination",
+      "documented": "Pagination uses page and limit, with page_size in the response.",
+      "actual": "Pagination uses limit and offset. Responses contain limit, offset, count, total, has_more, and results. The page parameter is not the actual pagination mechanism.",
+      "how_found": "Compared documented page requests with offset requests and inspected live response shapes.",
+      "impact": "A client implementing page/page_size pagination will not correctly traverse the dataset.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "pagination",
+      "documented": "Maximum page size is 200.",
+      "actual": "A request for limit=200 returned limit=50, establishing an observed maximum page size of 50.",
+      "how_found": "Requested a page with limit=200 and inspected the returned limit and result count.",
+      "impact": "Clients must use smaller pages and continue pagination to retrieve the complete dataset.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "completeness",
+      "documented": "The collection reports a total representing the available listing records.",
+      "actual": "The API reported total=3789, but complete offset pagination returned 4100 unique listing records.",
+      "how_found": "Paged from offset 0 until has_more=false and continued past the reported total. Records were still returned at offsets beyond 3789.",
+      "impact": "Trusting total would cause clients to miss 311 retrievable records.",
+      "evidence": [
+        "MAG-4001336",
+        "DWE-4002643",
+        "100-4001757",
+        "ZER-4003971",
+        "SQU-4000568"
+      ]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "completeness",
+      "documented": "The endpoint returns active sale listings only; inactive/expired/withdrawn records are excluded.",
+      "actual": "The endpoint returns both live and inactive records and exposes is_live.",
+      "how_found": "Fetched the complete dataset and found 867 records with is_live=false.",
+      "impact": "Consumers cannot assume every returned listing is active.",
+      "evidence": [
+        "100-4003009",
+        "100-4004033",
+        "SQU-4002860",
+        "100-4002612",
+        "SQU-4001855"
+      ]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "filters",
+      "documented": "min_price, max_price, and furnishing filter the listing collection.",
+      "actual": "The parameters are accepted but the backend query does not apply min_price/max_price filtering, and furnishing is ignored by the server query logic.",
+      "how_found": "Compared filtered requests with unfiltered results and verified that these parameters did not change the server-side dataset as expected.",
+      "impact": "A client relying on server-side filtering can display incorrect results.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "duplicates",
+      "documented": "Each listing represents exactly one physical property.",
+      "actual": "Multiple listing records appear to represent the same physical unit/property, including cross-portal records with matching names, locality, bedroom count, floor, area, and nearby coordinates.",
+      "how_found": "Grouped records using normalized property names and unit attributes, then validated candidate clusters using area and coordinate proximity.",
+      "impact": "Counting listing records as physical properties overstates the number of unique properties.",
+      "evidence": [
+        "DWE-4000890",
+        "ZER-4003644",
+        "DWE-4000129",
+        "SQU-4003454",
+        "MAG-4002043",
+        "100-4003155"
+      ]
+    },
+    {
+      "endpoint": "/v1/rentals",
+      "category": "units",
+      "documented": "Monthly rent is returned in the monthly_rent field and area fields follow the documented naming.",
+      "actual": "Rental records use price for monthly rent and super_builtup_area for the built-up area field.",
+      "how_found": "Inspected the live rental response schema and compared field names with the documentation.",
+      "impact": "A client reading monthly_rent or super_built_up_area would fail to display rental values correctly.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/rentals",
+      "category": "completeness",
+      "documented": "The collection total represents all retrievable rental records.",
+      "actual": "The API reported total=1432, but complete offset pagination returned 1550 rental records.",
+      "how_found": "Paged through the rental endpoint until has_more=false.",
+      "impact": "Trusting the reported total would miss 118 rental records.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/projects",
+      "category": "units",
+      "documented": "Project price_min and price_max are monetary values in INR.",
+      "actual": "Observed project prices use a mixed lakh/crore-style representation: values below 10 correspond to crore-scale values while values at or above 10 correspond to lakh-scale values.",
+      "how_found": "Inspected project price distributions and cross-checked project values against associated listing prices.",
+      "impact": "Treating raw project prices as INR produces nonsensical price ranges, including apparent min/max inversions.",
+      "evidence": [
+        "P40224",
+        "P40441",
+        "P40071",
+        "P40192",
+        "P40451"
+      ]
+    },
+    {
+      "endpoint": "/v1/projects",
+      "category": "completeness",
+      "documented": "The collection total represents the available project records.",
+      "actual": "The API reported total=425, but complete offset pagination returned 460 projects.",
+      "how_found": "Paged from offset 0 through the final page and stopped only when has_more=false.",
+      "impact": "Trusting total would miss 35 retrievable projects.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/projects",
+      "category": "consistency",
+      "documented": "total_listings is recomputed and always agrees with /v1/listings?project_id=... for the project.",
+      "actual": "The reported total_listings frequently differs from the listing records associated with the project. 336 projects were identified with mismatched listing counts.",
+      "how_found": "Compared project-reported listing counts with listing records grouped by project_id.",
+      "impact": "Project listing counts cannot be treated as authoritative.",
+      "evidence": [
+        "P40001",
+        "P40003",
+        "P40004",
+        "P40005",
+        "P40006",
+        "P40008",
+        "P40009",
+        "P40010"
+      ]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "data_quality",
+      "documented": "Listing price is a valid monetary value.",
+      "actual": "Nine listing records contain impossible negative prices.",
+      "how_found": "Scanned all 4100 retrievable listing records for non-positive/negative price anomalies and inspected the resulting records.",
+      "impact": "Negative prices cannot represent valid sale prices and must be excluded from price calculations.",
+      "evidence": [
+        "100-4000457",
+        "DWE-4001424",
+        "DWE-4002374",
+        "MAG-4000145",
+        "SQU-4002483",
+        "ZER-4000021",
+        "ZER-4001287",
+        "ZER-4001669",
+        "ZER-4001686"
+      ]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "fraud",
+      "documented": "Listings are genuine property records.",
+      "actual": "Nine positive-price records are extreme outliers with prices between ₹6,470 and ₹16,320 despite normal-looking residential metadata and areas around hundreds to thousands of square feet; these were identified as the dataset's likely fake/enquiry-generation listings.",
+      "how_found": "Sorted all positive-price listings, observed a sharp gap after the nine extreme low-price records, and inspected all nine records individually.",
+      "impact": "Including these records materially distorts price statistics and can surface non-genuine inventory to users.",
+      "evidence": [
+        "100-4001484",
+        "100-4001961",
+        "DWE-4000745",
+        "MAG-4000075",
+        "MAG-4000870",
+        "MAG-4001467",
+        "MAG-4002092",
+        "SQU-4001342",
+        "ZER-4002683"
+      ]
+    }
+  ]
+}
